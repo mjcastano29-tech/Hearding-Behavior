@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Herding Behavior — Simulación de Burbuja Financiera</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f4f0;
+      --bg-tertiary: #eeede8;
+      --text-primary: #1a1a18;
+      --text-secondary: #5f5e5a;
+      --text-tertiary: #888780;
+      --border: rgba(0,0,0,0.12);
+      --border-md: rgba(0,0,0,0.22);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1e1e1c;
+        --bg-secondary: #2a2a27;
+        --bg-tertiary: #333330;
+        --text-primary: #f0efe9;
+        --text-secondary: #b4b2a9;
+        --text-tertiary: #888780;
+        --border: rgba(255,255,255,0.12);
+        --border-md: rgba(255,255,255,0.22);
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    .card {
+      background: var(--bg-primary);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 780px;
+    }
+
+    header {
+      margin-bottom: 1.25rem;
+      padding-bottom: 1rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    header p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .btn-row { display: flex; gap: 8px; }
+
+    button {
+      background: transparent;
+      border: 0.5px solid var(--border-md);
+      border-radius: var(--radius-md);
+      padding: 7px 16px;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: var(--bg-secondary); }
+    button:active { transform: scale(0.98); }
+
+    .phase-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+    }
+
+    .phase-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .pb {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .ps  { background:#EAF3DE; color:#3B6D11; }
+    .pa  { background:#FAEEDA; color:#854F0B; }
+    .pm  { background:#FAECE7; color:#993C1D; }
+    .pb2 { background:#FCEBEB; color:#A32D2D; }
+    .pc  { background:#EEEDFE; color:#3C3489; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 8px;
+      margin-bottom: 1rem;
+    }
+
+    @media (max-width: 480px) {
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .metric {
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      padding: 9px 12px;
+    }
+    .metric .ml { font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; }
+    .metric .mv { font-size: 20px; font-weight: 500; color: var(--text-primary); }
+
+    .section-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-bottom: 5px;
+    }
+
+    .agent-legend {
+      display: flex;
+      gap: 14px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .agent-legend span { display: flex; align-items: center; gap: 4px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+    canvas#agentCanvas {
+      width: 100%;
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-md);
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    .chart-legend {
+      display: flex;
+      gap: 14px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 5px;
+    }
+    .chart-legend span { display: flex; align-items: center; gap: 4px; }
+    .sq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+
+    .chart-wrapper {
+      position: relative;
+      width: 100%;
+      height: 200px;
+    }
+
+    .log {
+      margin-top: 12px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      padding: 8px 12px;
+      max-height: 80px;
+      overflow-y: auto;
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    .le {
+      border-bottom: 0.5px solid var(--border);
+      padding: 2px 0;
+    }
+
+    .phase-timeline {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 1rem;
+    }
+    .phase-step {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--bg-tertiary);
+      transition: background 0.4s;
+    }
+    .ps-active   { background: #639922; }
+    .pa-active   { background: #EF9F27; }
+    .pm-active   { background: #D85A30; }
+    .pb2-active  { background: #E24B4A; }
+    .pc-active   { background: #7F77DD; }
+
+    footer {
+      margin-top: 1.5rem;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <header>
+    <h1>Herding Behavior — Simulación de Burbuja Financiera</h1>
+    <p>Basado en el modelo de Hyman Minsky. Los agentes copian la conducta de la mayoría, desacoplando el precio del valor fundamental.</p>
+  </header>
+
+  <div class="phase-timeline">
+    <div class="phase-step" id="ps0"></div>
+    <div class="phase-step" id="ps1"></div>
+    <div class="phase-step" id="ps2"></div>
+    <div class="phase-step" id="ps3"></div>
+    <div class="phase-step" id="ps4"></div>
+  </div>
+
+  <div class="top-row">
+    <div class="btn-row">
+      <button onclick="startSim()" id="btnStart">▶ Iniciar simulación</button>
+      <button onclick="resetSim()">↺ Reiniciar</button>
+    </div>
+    <div class="phase-wrap">
+      <span class="phase-label">Fase actual</span>
+      <span class="pb ps" id="phaseBadge">Stealth</span>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="ml">Precio del activo</div><div class="mv" id="mPrice">$100</div></div>
+    <div class="metric"><div class="ml">% comprando</div><div class="mv" id="mBuyers" style="color:#1D9E75">0%</div></div>
+    <div class="metric"><div class="ml">% vendiendo</div><div class="mv" id="mSellers" style="color:#D85A30">0%</div></div>
+    <div class="metric"><div class="ml">Valor fundamental</div><div class="mv" id="mFund">$100</div></div>
+  </div>
+
+  <div class="agent-legend">
+    <span><span class="dot" style="background:#1D9E75"></span>Comprando (herd)</span>
+    <span><span class="dot" style="background:#D85A30"></span>Vendiendo</span>
+    <span><span class="dot" style="background:#B4B2A9"></span>Neutral</span>
+    <span><span class="dot" style="background:#7F77DD"></span>Smart money</span>
+  </div>
+  <canvas id="agentCanvas" width="740" height="180"></canvas>
+
+  <div class="chart-legend">
+    <span><span class="sq" style="background:#D85A30"></span>Precio del activo</span>
+    <span><span class="sq" style="background:#1D9E75;opacity:0.7"></span>Valor fundamental</span>
+  </div>
+  <div class="chart-wrapper">
+    <canvas id="priceChart" role="img" aria-label="Gráfico de precio del activo vs valor fundamental mostrando la formación y colapso de la burbuja">Precio vs valor fundamental.</canvas>
+  </div>
+
+  <div class="log" id="log">
+    <em style="color:var(--text-tertiary)">La simulación mostrará eventos aquí...</em>
+  </div>
+</div>
+
+<footer>Simulación educativa — Herding Behavior en Finanzas · Modelo de Hyman Minsky</footer>
+
+<script>
+  const HERDING   = 0.75;
+  const N_AGENTS  = 90;
+  const SPEED     = 2;
+
+  const PHASES = [
+    { name:'Stealth',   badgeCls:'ps',  activeCls:'ps-active',  maxTick:40  },
+    { name:'Awareness', badgeCls:'pa',  activeCls:'pa-active',  maxTick:80  },
+    { name:'Mania',     badgeCls:'pm',  activeCls:'pm-active',  maxTick:130 },
+    { name:'Blow-off',  badgeCls:'pb2', activeCls:'pb2-active', maxTick:155 },
+    { name:'Crash',     badgeCls:'pc',  activeCls:'pc-active',  maxTick:200 },
+  ];
+
+  function getPhaseIdx(t) {
+    for (let i = 0; i < PHASES.length; i++) if (t < PHASES[i].maxTick) return i;
+    return PHASES.length - 1;
+  }
+
+  let running = false, tick = 0, animFrame = null, lastTick = 0, chart = null;
+  let S = {};
+
+  function buildAgents() {
+    return Array.from({ length: N_AGENTS }, (_, i) => ({
+      x:     Math.random() * 700 + 20,
+      y:     Math.random() * 140 + 20,
+      vx:    (Math.random() - 0.5) * 1.2,
+      vy:    (Math.random() - 0.5) * 1.2,
+      state: 'neutral',
+      smart: i < Math.max(2, Math.floor(N_AGENTS * 0.05)),
+      lag:   Math.floor(Math.random() * 20),
+      greed: Math.random(),
+    }));
+  }
+
+  function resetSim() {
+    running = false;
+    if (animFrame) cancelAnimationFrame(animFrame);
+    tick = 0; lastTick = 0;
+    S = { price: 100, fund: 100, ph: [100], fh: [100], agents: buildAgents() };
+    updateMetrics(); updatePhase(0); drawAgents();
+    if (chart) {
+      chart.data.labels = [0];
+      chart.data.datasets[0].data = [100];
+      chart.data.datasets[1].data = [100];
+      chart.update('none');
+    }
+    document.getElementById('btnStart').textContent = '▶ Iniciar simulación';
+    document.getElementById('log').innerHTML = '<em style="color:var(--text-tertiary)">La simulación mostrará eventos aquí...</em>';
+  }
+
+  function stepSim() {
+    tick++;
+    const pi = getPhaseIdx(tick);
+    const fundamentalDrift = [0.05, 0.1, 0.15, -0.05, -0.3][pi];
+    S.fund = Math.max(50, S.fund + fundamentalDrift + (Math.random() - 0.5) * 0.1);
+
+    let buyers = 0, sellers = 0;
+
+    S.agents.forEach(a => {
+      const ep = getPhaseIdx(Math.max(0, tick - a.lag));
+
+      if (a.smart) {
+        a.state = ep <= 1 ? 'buying' : ep >= 3 ? 'selling' : 'neutral';
+      } else {
+        const priceGain = (S.price - 100) / 100;
+        const herdBuy  = pi >= 1 && pi <= 3 ? HERDING * priceGain * a.greed : 0;
+        const herdSell = pi >= 4 ? HERDING * (1 - a.greed) : 0;
+        const r = Math.random();
+        if      (pi === 0) a.state = r < 0.05 ? 'buying' : 'neutral';
+        else if (pi === 1) a.state = r < (0.15 + herdBuy) ? 'buying' : 'neutral';
+        else if (pi === 2) a.state = r < (0.35 + herdBuy) ? 'buying' : 'neutral';
+        else if (pi === 3) a.state = r < 0.5 * HERDING ? 'buying' : r < 0.6 ? 'selling' : 'neutral';
+        else               a.state = r < (0.25 + herdSell) ? 'selling' : 'neutral';
+      }
+
+      if (a.state === 'buying')  buyers++;
+      if (a.state === 'selling') sellers++;
+
+      a.x += a.vx; a.y += a.vy;
+      if (a.x < 10 || a.x > 730) a.vx *= -1;
+      if (a.y < 10 || a.y > 170) a.vy *= -1;
+      if (a.state === 'buying') {
+        a.vx += (Math.random() - 0.5) * 0.3;
+        a.vy += (Math.random() - 0.5) * 0.3;
+      }
+    });
+
+    const net = (buyers - sellers) / N_AGENTS;
+    let dp = net * (2 + HERDING * 3) + (Math.random() - 0.5) * 0.5;
+    if (pi === 4) dp -= 2.5 + Math.random() * 2;
+    S.price = Math.max(10, S.price + dp);
+    S.ph.push(+(S.price).toFixed(1));
+    S.fh.push(+(S.fund).toFixed(1));
+    if (S.ph.length > 200) { S.ph.shift(); S.fh.shift(); }
+
+    updateMetrics(buyers, sellers);
+    updatePhase(pi);
+    drawAgents();
+    updateChart();
+
+    const buyPct = Math.round(buyers / N_AGENTS * 100);
+    if (tick === PHASES[0].maxTick) addLog('🐋 Smart money empieza a comprar silenciosamente.');
+    if (tick === PHASES[1].maxTick) addLog(`📰 Medios cubren el rally. ${buyPct}% de agentes comprando.`);
+    if (tick === PHASES[2].maxTick) addLog(`🤑 FOMO masivo. Precio ${Math.round((S.price / 100 - 1) * 100)}% sobre el valor fundamental.`);
+    if (tick === PHASES[3].maxTick) addLog('🔔 Smart money sale. El retail sigue comprando en el tope.');
+    if (tick === PHASES[4].maxTick - 10) addLog('💥 Pánico generalizado — herding inverso. Todos venden.');
+    if (tick >= 200) {
+      running = false;
+      addLog('✅ Simulación completa. La burbuja colapsó.');
+      document.getElementById('btnStart').textContent = '▶ Iniciar simulación';
+    }
+  }
+
+  function updateMetrics(b, s) {
+    document.getElementById('mPrice').textContent = '$' + Math.round(S.price);
+    document.getElementById('mFund').textContent  = '$' + Math.round(S.fund);
+    if (b !== undefined) {
+      document.getElementById('mBuyers').textContent  = Math.round(b / N_AGENTS * 100) + '%';
+      document.getElementById('mSellers').textContent = Math.round(s / N_AGENTS * 100) + '%';
+    }
+  }
+
+  function updatePhase(pi) {
+    const badge = document.getElementById('phaseBadge');
+    badge.textContent = PHASES[pi].name;
+    badge.className   = 'pb ' + PHASES[pi].badgeCls;
+    PHASES.forEach((p, i) => {
+      document.getElementById('ps' + i).className = 'phase-step' + (i <= pi ? ' ' + p.activeCls : '');
+    });
+  }
+
+  function drawAgents() {
+    const canvas = document.getElementById('agentCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const cm = { buying: '#1D9E75', selling: '#D85A30', neutral: '#B4B2A9' };
+    S.agents.forEach(a => {
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, a.smart ? 6 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = a.smart ? '#7F77DD' : cm[a.state];
+      ctx.fill();
+    });
+  }
+
+  function updateChart() {
+    if (!chart) return;
+    const len = S.ph.length;
+    chart.data.labels = Array.from({ length: len }, (_, i) => i);
+    chart.data.datasets[0].data = S.ph;
+    chart.data.datasets[1].data = S.fh;
+    chart.update('none');
+  }
+
+  function addLog(msg) {
+    const log = document.getElementById('log');
+    if (log.querySelector('em')) log.innerHTML = '';
+    const d = document.createElement('div');
+    d.className = 'le';
+    d.textContent = `T=${tick}: ${msg}`;
+    log.insertBefore(d, log.firstChild);
+  }
+
+  function startSim() {
+    if (tick >= 200) { resetSim(); return; }
+    running = !running;
+    document.getElementById('btnStart').textContent = running ? '⏸ Pausar' : '▶ Continuar';
+    if (running) loop(performance.now());
+  }
+
+  function loop(ts) {
+    if (!running) return;
+    if (ts - lastTick > 120 / SPEED) { lastTick = ts; stepSim(); if (!running) return; }
+    animFrame = requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('load', () => {
+    chart = new Chart(document.getElementById('priceChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: [0],
+        datasets: [
+          { label: 'Precio',       data: [100], borderColor: '#D85A30', borderWidth: 2,   pointRadius: 0, tension: 0.3, fill: false },
+          { label: 'Fundamental',  data: [100], borderColor: '#1D9E75', borderWidth: 1.5, borderDash: [5,4], pointRadius: 0, tension: 0.3, fill: false },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { display: false },
+          y: { ticks: { font: { size: 11 }, callback: v => '$' + v }, grid: { color: 'rgba(136,135,128,0.15)' } }
+        }
+      }
+    });
+    resetSim();
+  });
+</script>
+</body>
+</html>
